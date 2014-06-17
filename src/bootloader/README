@@ -1,0 +1,17 @@
+------------------------------------------------------------------------------
+README
+------------------------------------------------------------------------------
+
+This example implements a USB Device Firmware Upgrade (DFU) bootloader
+to demonstrate the use of the USB device stack.
+
+Board connections:
+------------------
+
+  PA4   (optional LED)	LED connected via a current limiting resistor to GND
+  PA8	(button)	Switch, connected to GND, to enable loader
+  PB8	(hotplug)	1.5k resister connected to P2 pin 1 (next to push
+			switch). This connection is optional but avoids the
+			need to continually plug/unplug the board before and
+			after programming.
+  USB	(mini USB)	USB acting as device, connect to computer

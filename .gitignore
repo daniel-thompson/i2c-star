@@ -1,0 +1,11 @@
+.exrc
+*.bin
+*.d
+*.elf
+*.hex
+*.map
+*.o
+.*.swp
+.*.swo
+cscope.out
+README.html
