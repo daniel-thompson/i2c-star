@@ -1,5 +1,5 @@
-i2c-cm3-usb - A STM32 based clone of the i2c-cm3-usb
-====================================================
+i2c-star - A STM32 based clone of the i2c-tiny-usb
+==================================================
 
 i2c-cm3-usb is a compatible clone of Till Harbaum's i2c-tiny-usb. The firmware
 has no software in common with Till's implementation but is compatible with
@@ -14,7 +14,7 @@ Quickstart
   compiler).
 - +make+
 - +make -C src/bootloader flash+
-- +make -C src/i2c-cm3-usb flash+
+- +make -C src/i2c-stm32f1-usb flash+
 
 To flash the bootloader an STLink v2 must be connected to the target
 boards JTAG/SWD socket.
