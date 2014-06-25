@@ -12,10 +12,12 @@
 LIBRFN_DIR = ../../librfn
 
 OBJS += \
+	bitops.o \
 	fibre.o \
 	fibre_default.o \
 	list.o \
 	messageq.o \
+	regdump.o \
 	ringbuf.o \
 	time_libopencm3.o \
 	util.o
