@@ -71,11 +71,11 @@ typedef struct i2c_device_map {
 	uint16_t devices[8];
 } i2c_device_map_t;
 
-static void i2c_ctx_init(i2c_ctx_t *c, uint32_t i2c)
+static void i2c_ctx_init(i2c_ctx_t *c, uint32_t pi2c)
 {
 	memset(c, 0, sizeof(*c));
 
-	c->i2c = i2c;
+	c->i2c = pi2c;
 	c->timeout = time_now() + 100000;
 }
 
@@ -210,13 +210,9 @@ static pt_state_t i2c_ctx_detect(i2c_ctx_t *c, i2c_device_map_t *map)
 		if (c->err)
 			continue;
 
-		printf("Got %02x\n", c->i);
-
 		PT_SPAWN(&c->leaf, i2c_ctx_stop(c));
 		if (c->err)
 			continue;
-
-		printf("Still got %02x\n", c->i);
 
 		map->devices[c->i / 16] |= 1 << (c->i % 16);
 	}
@@ -271,6 +267,8 @@ static pt_state_t do_i2csendbyte(console_t *c)
 
 	PT_END();
 }
+
+
 
 static pt_state_t do_i2cstop(console_t *c)
 {
@@ -349,16 +347,19 @@ static pt_state_t do_uptime(console_t *c)
 }
 
 static const console_cmd_t cmd_list[] = {
-    CONSOLE_CMD_VAR_INIT("i2cstart", do_i2cstart),
-    CONSOLE_CMD_VAR_INIT("i2csendaddr", do_i2csendaddr),
-    CONSOLE_CMD_VAR_INIT("i2csendbyte", do_i2csendbyte),
-    CONSOLE_CMD_VAR_INIT("i2cstop", do_i2cstop),
-    CONSOLE_CMD_VAR_INIT("i2creset", do_i2creset),
-    CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
-    CONSOLE_CMD_VAR_INIT("uptime", do_uptime)
+	CONSOLE_CMD_VAR_INIT("i2cstart", do_i2cstart),
+	CONSOLE_CMD_VAR_INIT("i2csendaddr", do_i2csendaddr),
+	CONSOLE_CMD_VAR_INIT("i2csendbyte", do_i2csendbyte),
+	CONSOLE_CMD_VAR_INIT("i2cstop", do_i2cstop),
+	CONSOLE_CMD_VAR_INIT("i2creset", do_i2creset),
+	CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
+	CONSOLE_CMD_VAR_INIT("uptime", do_uptime)
 };
 
-const console_gpio_t gpio_led = CONSOLE_GPIO_VAR_INIT("led", GPIOD, GPIO12, 0);
+static const console_gpio_t gpio_list[] = {
+	CONSOLE_GPIO_VAR_INIT("led", GPIOD, GPIO12, 0),
+	CONSOLE_GPIO_VAR_INIT("dac", GPIOD, GPIO4, console_gpio_default_on)
+};
 
 static void i2c_init(void)
 {
@@ -385,17 +386,14 @@ int main(void)
 
 	i2c_init();
 	time_init();
+
 	console_init(&cdcacm_console, stdout);
 	for (unsigned int i=0; i<lengthof(cmd_list); i++)
 		console_register(&cmd_list[i]);
-	console_gpio_register(&gpio_led);
+	for (unsigned int i=0; i<lengthof(gpio_list); i++)
+		console_gpio_register(&gpio_list[i]);
 
 	do_i2creset(&cdcacm_console);
-
-	/* Take DAC out of reset */
-	rcc_periph_clock_enable(RCC_GPIOD);
-	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_PULLUP, GPIO4);
-	gpio_set(GPIOD, GPIO4);
 
 	fibre_scheduler_main_loop();
 }
