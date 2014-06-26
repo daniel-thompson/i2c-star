@@ -63,6 +63,7 @@ typedef struct i2c_ctx {
 
 	uint32_t i2c;
 	uint32_t timeout;
+	uint8_t bytes_remaining;
 
 	int i;
 } i2c_ctx_t;
@@ -132,11 +133,13 @@ static pt_state_t i2c_ctx_start(i2c_ctx_t *c)
 }
 
 static pt_state_t i2c_ctx_sendaddr(i2c_ctx_t *c, uint16_t addr,
-				   uint8_t readwrite)
+				   uint8_t bytes_to_read)
 {
 	PT_BEGIN(&c->leaf);
 
-	i2c_send_7bit_address(c->i2c, addr, readwrite);
+	c->bytes_remaining = bytes_to_read;
+
+	i2c_send_7bit_address(c->i2c, addr, !!bytes_to_read);
 
 	while (!i2c_ctx_is_timed_out(c) &&
 	       !(I2C_SR1(c->i2c) & I2C_SR1_ADDR))
@@ -147,9 +150,20 @@ static pt_state_t i2c_ctx_sendaddr(i2c_ctx_t *c, uint16_t addr,
 		c->err = EIO;
 	}
 
+	/* If we are only reading one byte we must get ready to NACK the
+	 * final byte.
+	 */
+	if (c->bytes_remaining == 1)
+		I2C_CR1(c->i2c) &= ~I2C_CR1_ACK;
+	else if (c->bytes_remaining >= 2)
+		I2C_CR1(c->i2c) |= ~I2C_CR1_ACK;
+
 	/* Read sequence has side effect or clearing I2C_SR1_ADDR */
 	uint32_t reg32 __attribute__((unused));
 	reg32 = I2C_SR2(c->i2c);
+
+	if (c->bytes_remaining == 1)
+		i2c_send_stop(c->i2c);
 
 	PT_END();
 }
@@ -167,6 +181,30 @@ static pt_state_t i2c_ctx_senddata(i2c_ctx_t *c, uint8_t data)
 		i2c_ctx_reset(c);
 		c->err = EIO;
 	}
+
+	PT_END();
+}
+
+static pt_state_t i2c_ctx_getdata(i2c_ctx_t *c, uint8_t *data)
+{
+	PT_BEGIN(&c->leaf);
+
+	while (!i2c_ctx_is_timed_out(c) && !(I2C_SR1(i2c) & I2C_SR1_RxNE))
+		PT_YIELD();
+
+	if (!(I2C_SR1(i2c) & I2C_SR1_RxNE)) {
+		i2c_ctx_reset(c);
+		c->err = EIO;
+		PT_EXIT();
+	}
+
+	/* Need to NACK the final byte and STOP the transaction */
+	if (--c->bytes_remaining == 1) {
+		I2C_CR1(c->i2c) &= ~I2C_CR1_ACK;
+		i2c_send_stop(c->i2c);
+	}
+
+	*data = i2c_get_data(c->i2c);
 
 	PT_END();
 }
@@ -252,7 +290,7 @@ static pt_state_t do_i2csendaddr(console_t *c)
 	PT_END();
 }
 
-static pt_state_t do_i2csendbyte(console_t *c)
+static pt_state_t do_i2csenddata(console_t *c)
 {
 	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
 	uint8_t *data = &c->scratch.u8[sizeof(*ctx)];
@@ -268,6 +306,22 @@ static pt_state_t do_i2csendbyte(console_t *c)
 	PT_END();
 }
 
+static pt_state_t do_i2cgetdata(console_t *c)
+{
+	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
+	uint8_t *data = &c->scratch.u8[sizeof(*ctx)];
+
+	PT_BEGIN(&c->pt);
+
+	i2c_ctx_init(ctx, i2c);
+	ctx->verbose = true;
+	PT_SPAWN(&ctx->leaf, i2c_ctx_getdata(ctx, data));
+
+	if (!ctx->err)
+		fprintf(c->out, "Read 0x%02x\n", *data);
+
+	PT_END();
+}
 
 
 static pt_state_t do_i2cstop(console_t *c)
@@ -349,7 +403,8 @@ static pt_state_t do_uptime(console_t *c)
 static const console_cmd_t cmd_list[] = {
 	CONSOLE_CMD_VAR_INIT("i2cstart", do_i2cstart),
 	CONSOLE_CMD_VAR_INIT("i2csendaddr", do_i2csendaddr),
-	CONSOLE_CMD_VAR_INIT("i2csendbyte", do_i2csendbyte),
+	CONSOLE_CMD_VAR_INIT("i2csenddata", do_i2csenddata),
+	CONSOLE_CMD_VAR_INIT("i2cgetdata", do_i2cgetdata),
 	CONSOLE_CMD_VAR_INIT("i2cstop", do_i2cstop),
 	CONSOLE_CMD_VAR_INIT("i2creset", do_i2creset),
 	CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
