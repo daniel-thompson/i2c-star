@@ -17,7 +17,7 @@
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
-BINARY = i2c_cdcacm
+BINARY = i2c-explorer
 
 DEFS += -DF_CPU=120000000
 OBJS += console.o console_cdcacm.o console_cmd_gpio.o
