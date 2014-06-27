@@ -258,6 +258,62 @@ static pt_state_t i2c_ctx_detect(i2c_ctx_t *c, i2c_device_map_t *map)
 	PT_END();
 }
 
+/*!
+ * \brief Write to an I2C register.
+ *
+ * \todo API leaves space for 16-bit addresses and registers but this
+ *       is not implemented.
+ */
+static pt_state_t i2c_ctx_setreg(i2c_ctx_t *c, uint16_t addr, uint16_t reg,
+				 uint8_t val)
+{
+	PT_BEGIN(&c->pt);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_start(c));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_sendaddr(c, addr, I2C_WRITE));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_senddata(c, reg));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_senddata(c, val));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_stop(c));
+
+	PT_END();
+}
+
+static pt_state_t i2c_ctx_getreg(i2c_ctx_t *c, uint16_t addr, uint16_t reg,
+				 uint8_t *val)
+{
+	PT_BEGIN(&c->pt);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_start(c));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_sendaddr(c, addr, I2C_WRITE));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_senddata(c, reg));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_start(c));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_sendaddr(c, addr, I2C_READ));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_getdata(c, val));
+
+	/* For reads STOP is generated automatically by sendaddr and/or
+	 * getdata
+	 */
+
+	PT_END();
+}
 
 static pt_state_t do_i2cstart(console_t *c)
 {
@@ -379,6 +435,54 @@ static pt_state_t do_i2cdetect(console_t *c)
 	PT_END();
 }
 
+static pt_state_t do_i2cset(console_t *c)
+{
+	struct {
+		i2c_ctx_t ctx;
+		uint16_t addr;
+		uint16_t reg;
+		uint16_t val;
+	} *s = (void *) &c->scratch.u8[0];
+
+	PT_BEGIN(&c->pt);
+
+	s->addr = strtol(c->argv[1], NULL, 0);
+	s->reg = strtol(c->argv[2], NULL, 0);
+	s->val = strtol(c->argv[3], NULL, 0);
+
+	i2c_ctx_init(&s->ctx, i2c);
+	s->ctx.verbose = true;
+
+	PT_SPAWN(&s->ctx.pt, i2c_ctx_setreg(&s->ctx, s->addr, s->reg, s->val));
+
+	PT_END();
+}
+
+static pt_state_t do_i2cget(console_t *c)
+{
+	struct {
+		i2c_ctx_t ctx;
+		uint16_t addr;
+		uint16_t reg;
+		uint8_t val;
+	} *s = (void *) &c->scratch.u8[0];
+
+	PT_BEGIN(&c->pt);
+
+	s->addr = strtol(c->argv[1], NULL, 0);
+	s->reg = strtol(c->argv[2], NULL, 0);
+
+	i2c_ctx_init(&s->ctx, i2c);
+	s->ctx.verbose = true;
+
+	PT_SPAWN(&s->ctx.pt, i2c_ctx_getreg(&s->ctx, s->addr, s->reg, &s->val));
+
+	if (!s->ctx.err)
+		fprintf(c->out, "Read 0x%02x\n", s->val);
+
+	PT_END();
+}
+
 static pt_state_t do_uptime(console_t *c)
 {
 	unsigned int hours, minutes, seconds, microseconds;
@@ -408,6 +512,8 @@ static const console_cmd_t cmd_list[] = {
 	CONSOLE_CMD_VAR_INIT("i2cstop", do_i2cstop),
 	CONSOLE_CMD_VAR_INIT("i2creset", do_i2creset),
 	CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
+	CONSOLE_CMD_VAR_INIT("i2cset", do_i2cset),
+	CONSOLE_CMD_VAR_INIT("i2cget", do_i2cget),
 	CONSOLE_CMD_VAR_INIT("uptime", do_uptime)
 };
 
