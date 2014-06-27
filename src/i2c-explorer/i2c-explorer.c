@@ -327,6 +327,27 @@ static pt_state_t i2c_ctx_getreg(i2c_ctx_t *c, uint16_t addr, uint16_t reg,
 	PT_END();
 }
 
+static pt_state_t i2c_ctx_write(i2c_ctx_t *c, uint16_t addr, uint8_t *data,
+				uint8_t len)
+{
+	PT_BEGIN(&c->pt);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_start(c));
+	PT_EXIT_ON(c->err);
+
+	PT_SPAWN(&c->leaf, i2c_ctx_sendaddr(c, addr, I2C_WRITE));
+	PT_EXIT_ON(c->err);
+
+	for (c->i = 0; c->i < len; c->i++) {
+		PT_SPAWN(&c->leaf, i2c_ctx_senddata(c, data[c->i]));
+		PT_EXIT_ON(c->err);
+	}
+
+	PT_SPAWN(&c->leaf, i2c_ctx_stop(c));
+
+	PT_END();
+}
+
 static pt_state_t do_i2cstart(console_t *c)
 {
 	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
@@ -504,6 +525,40 @@ static pt_state_t do_i2cget(console_t *c)
 	PT_END();
 }
 
+static pt_state_t do_i2cwrite(console_t *c)
+{
+	struct {
+		uint16_t addr;
+		uint8_t num_bytes;
+		uint8_t data[16];
+		i2c_ctx_t ctx;
+	} *s = (void *) &c->scratch.u8[0];
+
+	PT_BEGIN(&c->pt);
+
+	/* Argument parsing. The structure is carefully organised so
+	 * that the arguments (which share the scratch space) are not
+	 * clobbered before they are read.
+	 */
+	s->addr = strtol(c->argv[1], NULL, 0);
+	s->num_bytes = strlen(c->argv[2]) / 2;
+	for (int i=0; i<s->num_bytes; i++) {
+		char byte[3] = { c->argv[2][i * 2], c->argv[2][i * 2 + 1],
+				 '\0' };
+		s->data[i] = strtol(byte, NULL, 16);
+	}
+
+	/* Issue the I2C transaction. */
+	i2c_ctx_init(&s->ctx, i2c);
+	PT_SPAWN(&s->ctx.pt,
+		 i2c_ctx_write(&s->ctx, s->addr, s->data, s->num_bytes));
+
+	if (s->ctx.err)
+		fprintf(c->out, "Write failed\n");
+
+	PT_END();
+}
+
 static pt_state_t do_i2cbus(console_t *c)
 {
 	int bus = strtol(c->argv[1], NULL, 0);
@@ -556,6 +611,7 @@ static const console_cmd_t cmd_list[] = {
 	CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
 	CONSOLE_CMD_VAR_INIT("i2cset", do_i2cset),
 	CONSOLE_CMD_VAR_INIT("i2cget", do_i2cget),
+	CONSOLE_CMD_VAR_INIT("i2cwrite", do_i2cwrite),
 	CONSOLE_CMD_VAR_INIT("i2cbus", do_i2cbus),
 	CONSOLE_CMD_VAR_INIT("uptime", do_uptime)
 };
