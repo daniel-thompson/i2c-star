@@ -96,9 +96,21 @@ static bool i2c_ctx_is_timed_out(i2c_ctx_t *c)
 
 static pt_state_t i2c_ctx_reset(i2c_ctx_t *c)
 {
-	/* TODO: Needs to reset the specified i2c cell */
-	rcc_periph_reset_pulse(RST_I2C1);
-	rcc_periph_reset_pulse(RST_I2C1);
+	/* TODO: Latest opencm3 has this code built in */
+	switch (c->i2c) {
+	case I2C1:
+		rcc_periph_reset_pulse(RST_I2C1);
+		rcc_periph_reset_pulse(RST_I2C1);
+		break;
+	case I2C2:
+		rcc_periph_reset_pulse(RST_I2C2);
+		rcc_periph_reset_pulse(RST_I2C2);
+		break;
+	case I2C3:
+		rcc_periph_reset_pulse(RST_I2C3);
+		rcc_periph_reset_pulse(RST_I2C3);
+		break;
+	}
 
 	/* peripheral configuration */
 	i2c_peripheral_disable(c->i2c);
@@ -492,6 +504,27 @@ static pt_state_t do_i2cget(console_t *c)
 	PT_END();
 }
 
+static pt_state_t do_i2cbus(console_t *c)
+{
+	int bus = strtol(c->argv[1], NULL, 0);
+
+	switch (bus) {
+	case 1:
+		i2c = I2C1;
+		break;
+	case 2:
+		i2c = I2C2;
+		break;
+	case 3:
+		i2c = I2C3;
+		break;
+	default:
+		fprintf(c->out, "ERROR: Bad bus %d\n", bus);
+	}
+
+	return PT_EXITED;
+}
+
 static pt_state_t do_uptime(console_t *c)
 {
 	unsigned int hours, minutes, seconds, microseconds;
@@ -523,6 +556,7 @@ static const console_cmd_t cmd_list[] = {
 	CONSOLE_CMD_VAR_INIT("i2cdetect", do_i2cdetect),
 	CONSOLE_CMD_VAR_INIT("i2cset", do_i2cset),
 	CONSOLE_CMD_VAR_INIT("i2cget", do_i2cget),
+	CONSOLE_CMD_VAR_INIT("i2cbus", do_i2cbus),
 	CONSOLE_CMD_VAR_INIT("uptime", do_uptime)
 };
 
@@ -534,20 +568,42 @@ static const console_gpio_t gpio_list[] = {
 static void i2c_init(void)
 {
 	/* clocks */
+	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_GPIOB);
+	rcc_periph_clock_enable(RCC_GPIOC);
 	rcc_periph_clock_enable(RCC_I2C1);
+	rcc_periph_clock_enable(RCC_I2C2);
+	rcc_periph_clock_enable(RCC_I2C3);
 
-	rcc_periph_reset_pulse(RST_I2C1);
-
-	/* console commands */
-	i2c = I2C1;
+	/* initialize the peripherals */
+	i2c_ctx_t ctx;
+	i2c_ctx_init(&ctx, I2C1);
+	i2c_ctx_reset(&ctx);
+	i2c_ctx_init(&ctx, I2C2);
+	i2c_ctx_reset(&ctx);
+	i2c_ctx_init(&ctx, I2C3);
+	i2c_ctx_reset(&ctx);
 
 	/* GPIO for I2C1 */
 	gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO6 | GPIO9);
 	gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_100MHZ,
 				GPIO6 | GPIO9);
-	gpio_set_af(GPIOB, GPIO_AF4, GPIO6);
-	gpio_set_af(GPIOB, GPIO_AF4, GPIO9);
+	gpio_set_af(GPIOB, GPIO_AF4, GPIO6 | GPIO9);
+
+	/* GPIO for I2C3 */
+	gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO8);
+	gpio_set_output_options(GPIOA, GPIO_OTYPE_OD, GPIO_OSPEED_100MHZ,
+				GPIO8);
+	gpio_set_af(GPIOA, GPIO_AF4, GPIO8);
+	gpio_mode_setup(GPIOC, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO9);
+	gpio_set_output_options(GPIOC, GPIO_OTYPE_OD, GPIO_OSPEED_100MHZ,
+				GPIO9);
+	gpio_set_af(GPIOC, GPIO_AF4, GPIO9);
+
+
+	/* set the default I2C bus */
+	i2c = I2C1;
+
 }
 
 int main(void)
@@ -563,7 +619,6 @@ int main(void)
 	for (unsigned int i=0; i<lengthof(gpio_list); i++)
 		console_gpio_register(&gpio_list[i]);
 
-	do_i2creset(&cdcacm_console);
 
 	fibre_scheduler_main_loop();
 }
