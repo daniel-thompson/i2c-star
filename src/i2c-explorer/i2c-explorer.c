@@ -330,51 +330,58 @@ static pt_state_t do_i2cstart(console_t *c)
 
 static pt_state_t do_i2csendaddr(console_t *c)
 {
-	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
-	uint8_t *slaveaddr = &c->scratch.u8[sizeof(*ctx)];
-	uint8_t *readwrite = slaveaddr + 1;
+	struct {
+		uint8_t addr;
+		uint8_t bytes_to_read;
+		i2c_ctx_t ctx;
+	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
 
-	*slaveaddr = strtol(c->argv[1], NULL, 0);
-	*readwrite = !!strtol(c->argv[2], NULL, 0);
+	s->addr = strtol(c->argv[1], NULL, 0);
+	s->bytes_to_read = strtol(c->argv[2], NULL, 0);
 
-	i2c_ctx_init(ctx, i2c);
-	ctx->verbose = true;
-	PT_SPAWN(&ctx->leaf, i2c_ctx_sendaddr(ctx, *slaveaddr, *readwrite));
+	i2c_ctx_init(&s->ctx, i2c);
+	s->ctx.verbose = true;
+	PT_SPAWN(&s->ctx.leaf,
+		 i2c_ctx_sendaddr(&s->ctx, s->addr, s->bytes_to_read));
 
 	PT_END();
 }
 
 static pt_state_t do_i2csenddata(console_t *c)
 {
-	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
-	uint8_t *data = &c->scratch.u8[sizeof(*ctx)];
+	struct {
+		uint8_t data;
+		i2c_ctx_t ctx;
+	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
 
-	*data = strtol(c->argv[1], NULL, 0);
+	s->data = strtol(c->argv[1], NULL, 0);
 
-	i2c_ctx_init(ctx, i2c);
-	ctx->verbose = true;
-	PT_SPAWN(&ctx->leaf, i2c_ctx_senddata(ctx, *data));
+	i2c_ctx_init(&s->ctx, i2c);
+	s->ctx.verbose = true;
+	PT_SPAWN(&s->ctx.leaf, i2c_ctx_senddata(&s->ctx, s->data));
 
 	PT_END();
 }
 
 static pt_state_t do_i2cgetdata(console_t *c)
 {
-	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
-	uint8_t *data = &c->scratch.u8[sizeof(*ctx)];
+	struct {
+		uint8_t data;
+		i2c_ctx_t ctx;
+	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
 
-	i2c_ctx_init(ctx, i2c);
-	ctx->verbose = true;
-	PT_SPAWN(&ctx->leaf, i2c_ctx_getdata(ctx, data));
+	i2c_ctx_init(&s->ctx, i2c);
+	s->ctx.verbose = true;
+	PT_SPAWN(&s->ctx.leaf, i2c_ctx_getdata(&s->ctx, &s->data));
 
-	if (!ctx->err)
-		fprintf(c->out, "Read 0x%02x\n", *data);
+	if (!s->ctx.err)
+		fprintf(c->out, "Read 0x%02x\n", s->data);
 
 	PT_END();
 }
@@ -408,25 +415,27 @@ static pt_state_t do_i2creset(console_t *c)
 
 static pt_state_t do_i2cdetect(console_t *c)
 {
-	i2c_ctx_t *ctx = (void *) &c->scratch.u8[0];
-	i2c_device_map_t *map = (void *) &c->scratch.u8[sizeof(*ctx)];
+	struct {
+		i2c_ctx_t ctx;
+		i2c_device_map_t map;
+	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
 
-	i2c_ctx_init(ctx, i2c);
-	PT_SPAWN(&ctx->pt, i2c_ctx_detect(ctx, map));
+	i2c_ctx_init(&s->ctx, i2c);
+	PT_SPAWN(&s->ctx.pt, i2c_ctx_detect(&s->ctx, &s->map));
 
 	fprintf(c->out,
 		"     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f");
 
-	for (ctx->i = 0; ctx->i < 0x80; ctx->i++) {
-		if ((ctx->i & 0xf) == 0) {
+	for (s->ctx.i = 0; s->ctx.i < 0x80; s->ctx.i++) {
+		if ((s->ctx.i & 0xf) == 0) {
 			printf("\n");
-			printf("%02x:", ctx->i);
+			printf("%02x:", s->ctx.i);
 		}
 
-		if (map->devices[ctx->i / 16] & 1 << (ctx->i % 16))
-			printf(" %02x", ctx->i);
+		if (s->map.devices[s->ctx.i / 16] & 1 << (s->ctx.i % 16))
+			printf(" %02x", s->ctx.i);
 		else
 			printf(" --");
 	}
@@ -438,10 +447,10 @@ static pt_state_t do_i2cdetect(console_t *c)
 static pt_state_t do_i2cset(console_t *c)
 {
 	struct {
-		i2c_ctx_t ctx;
 		uint16_t addr;
 		uint16_t reg;
 		uint16_t val;
+		i2c_ctx_t ctx;
 	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
@@ -461,10 +470,10 @@ static pt_state_t do_i2cset(console_t *c)
 static pt_state_t do_i2cget(console_t *c)
 {
 	struct {
-		i2c_ctx_t ctx;
 		uint16_t addr;
 		uint16_t reg;
 		uint8_t val;
+		i2c_ctx_t ctx;
 	} *s = (void *) &c->scratch.u8[0];
 
 	PT_BEGIN(&c->pt);
