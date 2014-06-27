@@ -153,8 +153,9 @@ static pt_state_t i2c_ctx_sendaddr(i2c_ctx_t *c, uint16_t addr,
 
 	i2c_send_7bit_address(c->i2c, addr, !!bytes_to_read);
 
-	while (!i2c_ctx_is_timed_out(c) &&
-	       !(I2C_SR1(c->i2c) & I2C_SR1_ADDR))
+	while (!i2c_ctx_is_timed_out(c) &&		// bad
+	       !(I2C_SR1(c->i2c) & I2C_SR1_AF) &&	// bad
+	       !(I2C_SR1(c->i2c) & I2C_SR1_ADDR))	// good
 		PT_YIELD();
 
 	if (!(I2C_SR1(c->i2c) & I2C_SR1_ADDR)) {
@@ -655,11 +656,6 @@ static void i2c_init(void)
 	gpio_set_output_options(GPIOC, GPIO_OTYPE_OD, GPIO_OSPEED_100MHZ,
 				GPIO9);
 	gpio_set_af(GPIOC, GPIO_AF4, GPIO9);
-
-
-	/* set the default I2C bus */
-	i2c = I2C1;
-
 }
 
 int main(void)
