@@ -17,9 +17,10 @@
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
-BINARY = i2c-cm3-usb
+BINARY = i2c-stm32f4-usb
 
 DEFS += -DF_CPU=120000000
+DEFS += -DF_APB1=30000000
 
 LDSCRIPT = ../stm32f4-discovery.ld
 include ../../mk/libopencm3.stm32f4xx.mk

@@ -17,9 +17,11 @@
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
-BINARY = i2c-cm3-usb
+BINARY = i2c-stm32f1-usb
 
 DEFS += -DF_CPU=72000000
+DEFS += -DF_APB1=36000000
+
 OBJS += console.o console_stm32f1.o
 
 DFU_ADDRESS = 0x08002000
