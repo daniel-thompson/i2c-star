@@ -112,13 +112,27 @@ static pt_state_t i2c_ctx_reset(i2c_ctx_t *c)
 		break;
 	}
 
+	/* freq's numeric value ends up in MHz (i.e. in this case, 30) */
+	uint16_t freq = I2C_CR2_FREQ_30MHZ;
+
+	/* CCR is the number of APB bus cycles in *half* an I2C bus
+	 * cycle. For Sm (100Khz) this ends up as:
+	 *   freq * 1MHz / 2 * 100KHz
+	 *   freq * 1000000 / 200000
+	 *   freq * 5
+	 *
+	 * Similar trise is the number of APB bus cycles in the rise
+	 * time (plus 1). For Sm (1us) this ends up as:
+	 *   freq * 1Mhz / (1/1us)  + 1
+	 *   freq * 1MHz / 1MHz  + 1
+	 *   freq + 1
+	 */
+
 	/* peripheral configuration */
 	i2c_peripheral_disable(c->i2c);
-	i2c_set_clock_frequency(c->i2c, I2C_CR2_FREQ_30MHZ);
-
-	/* Standard mode (Sm), "square" duty cycle, very slow */
-	i2c_set_ccr(c->i2c, 0x0fff);
-	i2c_set_trise(c->i2c, 0x3f);
+	i2c_set_clock_frequency(c->i2c, freq);
+	i2c_set_ccr(c->i2c, freq * 5);
+	i2c_set_trise(c->i2c, freq + 1);
 	i2c_set_own_7bit_slave_address(c->i2c, 0x32);
 	i2c_peripheral_enable(c->i2c);
 
