@@ -1,5 +1,5 @@
 /*
- * This file is part of the i2c-cm3-usb project.
+ * This file is part of the i2c-star project.
  *
  * Copyright (C) 2014 Daniel Thompson <daniel@redfelineninja.org.uk>
  *
@@ -32,6 +32,7 @@
 #include <librfn/fibre.h>
 #include <librfn/time.h>
 #include <librfn/util.h>
+#include <librfm3/i2c_ctx.h>
 
 static const struct usb_device_descriptor dev = {
 	.bLength = USB_DT_DEVICE_SIZE,
@@ -93,7 +94,7 @@ static const struct usb_config_descriptor config = {
 
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
-	"i2c-cm3-usb",
+	"i2c-star",
 };
 
 /* Buffer to be used for control requests. */
@@ -122,21 +123,21 @@ uint8_t usbd_control_buffer[128];
 #define I2C_FUNC_10BIT_ADDR		0x00000002
 #define I2C_FUNC_PROTOCOL_MANGLING	0x00000004 /* I2C_M_{REV_DIR_ADDR,NOSTART,..} */
 #define I2C_FUNC_SMBUS_HWPEC_CALC	0x00000008 /* SMBus 2.0 */
-#define I2C_FUNC_SMBUS_READ_WORD_DATA_PEC  0x00000800 /* SMBus 2.0 */ 
-#define I2C_FUNC_SMBUS_WRITE_WORD_DATA_PEC 0x00001000 /* SMBus 2.0 */ 
+#define I2C_FUNC_SMBUS_READ_WORD_DATA_PEC  0x00000800 /* SMBus 2.0 */
+#define I2C_FUNC_SMBUS_WRITE_WORD_DATA_PEC 0x00001000 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_PROC_CALL_PEC	0x00002000 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_BLOCK_PROC_CALL_PEC 0x00004000 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_BLOCK_PROC_CALL	0x00008000 /* SMBus 2.0 */
-#define I2C_FUNC_SMBUS_QUICK		0x00010000 
-#define I2C_FUNC_SMBUS_READ_BYTE	0x00020000 
-#define I2C_FUNC_SMBUS_WRITE_BYTE	0x00040000 
-#define I2C_FUNC_SMBUS_READ_BYTE_DATA	0x00080000 
-#define I2C_FUNC_SMBUS_WRITE_BYTE_DATA	0x00100000 
-#define I2C_FUNC_SMBUS_READ_WORD_DATA	0x00200000 
-#define I2C_FUNC_SMBUS_WRITE_WORD_DATA	0x00400000 
-#define I2C_FUNC_SMBUS_PROC_CALL	0x00800000 
-#define I2C_FUNC_SMBUS_READ_BLOCK_DATA	0x01000000 
-#define I2C_FUNC_SMBUS_WRITE_BLOCK_DATA 0x02000000 
+#define I2C_FUNC_SMBUS_QUICK		0x00010000
+#define I2C_FUNC_SMBUS_READ_BYTE	0x00020000
+#define I2C_FUNC_SMBUS_WRITE_BYTE	0x00040000
+#define I2C_FUNC_SMBUS_READ_BYTE_DATA	0x00080000
+#define I2C_FUNC_SMBUS_WRITE_BYTE_DATA	0x00100000
+#define I2C_FUNC_SMBUS_READ_WORD_DATA	0x00200000
+#define I2C_FUNC_SMBUS_WRITE_WORD_DATA	0x00400000
+#define I2C_FUNC_SMBUS_PROC_CALL	0x00800000
+#define I2C_FUNC_SMBUS_READ_BLOCK_DATA	0x01000000
+#define I2C_FUNC_SMBUS_WRITE_BLOCK_DATA 0x02000000
 #define I2C_FUNC_SMBUS_READ_I2C_BLOCK	0x04000000 /* I2C-like block xfer  */
 #define I2C_FUNC_SMBUS_WRITE_I2C_BLOCK	0x08000000 /* w/ 1-byte reg. addr. */
 #define I2C_FUNC_SMBUS_READ_I2C_BLOCK_2	 0x10000000 /* I2C-like block xfer  */
@@ -170,7 +171,7 @@ const unsigned long func = I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 
 #define STATUS_IDLE	   0
 #define STATUS_ADDRESS_ACK 1
-#define STATUS_ADDRESS_NAK 2
+#define STATUS_ADDRESS_NACK 2
 
 static uint8_t status = STATUS_IDLE;
 
@@ -188,52 +189,50 @@ static int usb_i2c_io(struct usb_setup_data *req, uint8_t *buf, uint16_t *len)
 	/* Interpret the request */
 	uint8_t cmd = req->bRequest;
 	uint8_t address = req->wIndex;
-	uint8_t readwrite = req->wValue & I2C_M_RD ? I2C_READ : I2C_WRITE;
+	uint8_t is_read = req->wValue & I2C_M_RD;
 	uint8_t size = req->wLength;
 
-	/* Send START condition (automatically selected between start and
-	 * repstrat. */
-	i2c_send_start(i2c);
+	i2c_ctx_t ctx;
 
-	/* Waiting for START is send and switched to master mode. */
-	while (!((I2C_SR1(i2c) & I2C_SR1_SB) &
-		 (I2C_SR2(i2c) & (I2C_SR2_MSL | I2C_SR2_BUSY))))
-		;
+	i2c_ctx_init(&ctx, I2C1);
 
-	/* Send destination address. */
-	i2c_send_7bit_address(i2c, address, readwrite);
+	/* We can ignore CMD_I2C_BEGIN, the hardware will work out which
+	 * type of start condition to generate.
+	 */
+	PT_CALL(&ctx.leaf, i2c_ctx_start(&ctx));
+	if (ctx.err)
+		goto err;
 
-	/* Waiting for address is transferred. */
-	while (!(I2C_SR1(i2c) & I2C_SR1_ADDR))
-		;
+	/* Send the address */
+	PT_CALL(&ctx.leaf,
+		i2c_ctx_sendaddr(&ctx, address, (is_read ? size : 0)));
+	if (ctx.err)
+		goto err;
 
-	/* Cleaning ADDR condition sequence. */
-	reg32 = I2C_SR2(i2c);
-
-	if (readwrite == I2C_READ) {
-		for (uint8_t i=0; i<size; i++) {
-			/* Now the slave should begin to send us the first byte.
-			 * Await BTF. */
-			while (!(I2C_SR1(i2c) & I2C_SR1_BTF))
-				;
-			buf[i] = i2c_get_data(i2c);
-		}
-	} else if (size) {
-		for (uint8_t i=0; i<(size-1); i++) {
-			i2c_send_data(i2c, buf[i]);
-			while (!(I2C_SR1(i2c) & I2C_SR1_BTF));
-		}
-
-		/* after last byte we must wait for TxE too */
-		i2c_send_data(i2c, buf[size-1]);
-		while (!(I2C_SR1(i2c) & (I2C_SR1_BTF | I2C_SR1_TxE)));
+	/* Perform the transaction */
+	for (int i=0; i<size; i++) {
+		PT_CALL(&ctx.leaf, is_read ? i2c_ctx_getdata(&ctx, buf + i)
+					    : i2c_ctx_senddata(&ctx, buf[i]));
+		if (ctx.err)
+			goto err;
 	}
 
-	if (cmd & CMD_I2C_END)
-		i2c_send_stop(i2c);
-	
+	/* Stop the transaction if requested and this is a write transaction
+	 * (reads are stopped automatically)
+	 */
+	if (cmd & CMD_I2C_END && !is_read) {
+		PT_CALL(&ctx.leaf, i2c_ctx_stop(&ctx));
+		if (ctx.err)
+			goto err;
+	}
 
-	*len = size;
+	status = STATUS_ADDRESS_ACK;
+	*len = (is_read ? size : 0);
+	return USBD_REQ_HANDLED;
+
+err:
+	status = STATUS_ADDRESS_NACK;
+	*len = 0;
 	return USBD_REQ_HANDLED;
 }
 
@@ -248,19 +247,13 @@ static int usb_control_request(usbd_device *usbd_dev,
 	(void)usbd_dev;
 	(void)complete;
 
-	/* optimistically set the reply buffer (because replies are
-	 * manipulated by *len and if this is unmodified then the reply
-	 * buffer is ignored.
-	 */
-	*buf = reply_buf;
-
 	switch (req->bRequest) {
 	case CMD_ECHO:
 		memcpy(reply_buf, &req->wValue, sizeof(req->wValue));
 		*buf = reply_buf;
 		*len = sizeof(req->wValue);
 		return USBD_REQ_HANDLED;
-	
+
 	case CMD_GET_FUNC:
 		/* Report our capabilities */
 		memcpy(reply_buf, &func, sizeof(func));
@@ -273,9 +266,9 @@ static int usb_control_request(usbd_device *usbd_dev,
 		 * frequency by specifying the shortest time between
 		 * clock edges.
 		 *
-		 * This implementation silently ignores delay requests.
+		 * This implementation silently ignores delay requests. We
+		 * run the hardware as fast as we are permitted.
 		 */
-		printf("CMD_SET_DELAY\n");
 		*buf = reply_buf;
 		*len = 0;
 		return USBD_REQ_HANDLED;
@@ -294,10 +287,10 @@ static int usb_control_request(usbd_device *usbd_dev,
 		*buf = reply_buf;
 		*len = sizeof(status);
 		return USBD_REQ_HANDLED;
-		
+
 	default:
 		break;
-		
+
 	}
 
 	return USBD_REQ_NEXT_CALLBACK;
@@ -344,44 +337,25 @@ static fibre_t usb_task = FIBRE_VAR_INIT(usb_fibre);
 
 static void i2c_init(void)
 {
-	/* Enable clocks for I2C1 and AFIO. */
+	/* clocks */
+	rcc_periph_clock_enable(RCC_GPIOB);
 	rcc_periph_clock_enable(RCC_I2C1);
 
-	/* Set AF mode for SCL and SDA */
+	/* initialize the peripheral */
+	i2c_ctx_t ctx;
+	i2c_ctx_init(&ctx, I2C1);
+	i2c_ctx_reset(&ctx);
+
+	/* GPIO for I2C1 */
 	gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO6 | GPIO9);
-	gpio_set_af(GPIOB, GPIO_AF1, GPIO6 | GPIO9);
+	gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_100MHZ,
+				GPIO6 | GPIO9);
+	gpio_set_af(GPIOB, GPIO_AF4, GPIO6 | GPIO9);
 
-	/* Disable the I2C before changing any configuration. */
-	i2c_peripheral_disable(i2c);
-
-	/* APB1 is running at 36MHz. */
-	i2c_set_clock_frequency(i2c, I2C_CR2_FREQ_36MHZ);
-
-	/* 400KHz - I2C Fast Mode */
-	//i2c_set_fast_mode(i2c);
-
-	/*
-	 * fclock for I2C is 36MHz APB2 -> cycle time 28ns, low time at 400kHz
-	 * incl trise -> Thigh = 1600ns; CCR = tlow/tcycle = 0x1C,9;
-	 * Datasheet suggests 0x1e.
-	 */
-	i2c_set_ccr(i2c, 0x1e);
-
-	/*
-	 * fclock for I2C is 36MHz -> cycle time 28ns, rise time for
-	 * 400kHz => 300ns and 100kHz => 1000ns; 300ns/28ns = 10;
-	 * Incremented by 1 -> 11.
-	 */
-	i2c_set_trise(i2c, 0x0b);
-
-	/*
-	 * This is our slave address - needed only if we want to receive from
-	 * other masters.
-	 */
-	i2c_set_own_7bit_slave_address(i2c, 0x32);
-
-	/* If everything is configured -> enable the peripheral. */
-	i2c_peripheral_enable(i2c);
+	/* take the DAC out of reset (so there is something in the bus) */
+	rcc_periph_clock_enable(RCC_GPIOD);
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO4);
+	gpio_set(GPIOD, GPIO4);
 }
 
 int main(void)
