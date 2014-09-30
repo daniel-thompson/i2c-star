@@ -1,7 +1,8 @@
 /*
- * This file is part of the libopencm3 project.
+ * This file is part of the i2c-star project.
  *
  * Copyright (C) 2010 Gareth McMullin <gareth@blacksphere.co.nz>
+ * Copyright (C) 2014 Daniel Thompson <daniel@redfelineninja.org.uk>
  *
  * This library is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -24,6 +25,8 @@
 #include <libopencm3/cm3/scb.h>
 #include <libopencm3/usb/usbd.h>
 #include <libopencm3/usb/dfu.h>
+#include <librfn/time.h>
+#include <librfn/util.h>
 
 #define APP_ADDRESS	0x08002000
 
@@ -107,8 +110,8 @@ const struct usb_config_descriptor config = {
 
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
-	"i2c-cm3-usb DFU upgrade",
-	"v2.05",
+	"i2c-stm32f1-usb DFU upgrade",
+	"v1.1",
 	/* This string is used by ST Microelectronics' DfuSe utility. */
 	"@Internal Flash   /0x08000000/8*001Ka,56*001Kg",
 };
@@ -229,26 +232,57 @@ static int usbdfu_control_request(usbd_device *usbd_dev, struct usb_setup_data *
 	return 0;
 }
 
+static usbd_device *usb_init(void)
+{
+	uint32_t t;
+	usbd_device *usb_dev;
+
+	/* lower hotplug and leave enough time for the host to notice */
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
+		      GPIO11 | GPIO12);
+	gpio_clear(GPIOA, GPIO11 || GPIO12);
+	t = time_now() + 10000;
+	while (cyclecmp32(time_now(), t) < 0)
+		;
+
+	usb_dev =
+	    usbd_init(&stm32f103_usb_driver, &dev, &config, usb_strings, 4,
+		      usbd_control_buffer, sizeof(usbd_control_buffer));
+	usbd_register_control_callback(
+	    usb_dev, USB_REQ_TYPE_CLASS | USB_REQ_TYPE_INTERFACE,
+	    USB_REQ_TYPE_TYPE | USB_REQ_TYPE_RECIPIENT, usbdfu_control_request);
+
+	return usb_dev;
+}
+
 int main(void)
 {
 	const char key[] = "remain-in-loader";
+	const char anti_key[] = "leave-loader-now";
 
 	char * const marker = (char *)0x20004800; /* RAM@18K */
-	bool found_marker;
-	usbd_device *usbd_dev;
+	bool found_key, found_anti_key, found_pin_reset;
+	usbd_device *usb_dev;
 
 	rcc_periph_clock_enable(RCC_GPIOA);
 
-	/* Set GPIO1 (in GPIO port A) to 'pull down'. */
-	GPIOA_ODR = 0;
-	gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_PULL_UPDOWN, GPIO0
-);
 
 	/* Check and clear the marker value */
-	found_marker = (0 == strcmp(marker, key));
+	found_key = (0 == strcmp(marker, key));
+	found_anti_key = (0 == strcmp(marker, anti_key));
 	memset(marker, 0, sizeof(key));
 
-	if (!gpio_get(GPIOA, GPIO0) && !found_marker) {
+	/* Check reset reason and clear it. Note that we can only clear
+	 * the reset reason in the bootloader because we know the application
+	 * doesn't use it.
+	 */
+	found_pin_reset =
+	    (RCC_CSR & RCC_CSR_PINRSTF) &&
+	    !(RCC_CSR & (RCC_CSR_LPWRRSTF | RCC_CSR_WWDGRSTF |
+			 RCC_CSR_IWDGRSTF | RCC_CSR_SFTRSTF | RCC_CSR_PORRSTF));
+	RCC_CSR |= RCC_CSR_RMVF;
+
+	if ((!found_key && !found_pin_reset) || found_anti_key) {
 		/* Boot the application if it's valid. */
 		if ((*(volatile uint32_t *)APP_ADDRESS & 0x2FFE0000) == 0x20000000) {
 			/* Restore GPIOA to reset defaults */
@@ -268,24 +302,18 @@ int main(void)
 	rcc_clock_setup_in_hsi_out_48mhz();
 	rcc_periph_clock_enable(RCC_GPIOB);
 
+	/* set the anti-key so that the next reset causes us to leave the
+	 * bootloader if there is a valid application flashed
+	 */
+	memcpy(marker, anti_key, sizeof(anti_key));
+
 	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
 		      GPIO_CNF_OUTPUT_PUSHPULL, GPIO4);
 	gpio_clear(GPIOA, GPIO4);
 
-	usbd_dev =
-	    usbd_init(&stm32f103_usb_driver, &dev, &config, usb_strings, 4,
-		      usbd_control_buffer, sizeof(usbd_control_buffer));
-	usbd_register_control_callback(
-				usbd_dev,
-				USB_REQ_TYPE_CLASS | USB_REQ_TYPE_INTERFACE,
-				USB_REQ_TYPE_TYPE | USB_REQ_TYPE_RECIPIENT,
-				usbdfu_control_request);
-
-	/* assert hotplug */
-	GPIOB_ODR |= GPIO8;
-	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
-		      GPIO8);
+	time_init();
+	usb_dev = usb_init();
 
 	while (1)
-		usbd_poll(usbd_dev);
+		usbd_poll(usb_dev);
 }
