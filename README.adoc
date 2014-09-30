@@ -29,7 +29,8 @@ The firmware can be easily ported by has been tested on an small STM32F103C8T6
 based breakout board. Connections required are:
 
 - USB to host computer
-- TODO: I2C pins
+- B7: I2C bus SDA and B6: I2C bus SCL (don't forget pull up resistors)
+- [Optional; debug only] PA9: UART TX and PA10: UART RX
 
 Example hardware
 ----------------
