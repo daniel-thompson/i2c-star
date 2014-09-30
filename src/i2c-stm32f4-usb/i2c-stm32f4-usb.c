@@ -94,7 +94,7 @@ static const struct usb_config_descriptor config = {
 
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
-	"i2c-star",
+	"i2c-stm32f4-usb",
 };
 
 /* Buffer to be used for control requests. */
