@@ -1,5 +1,5 @@
 /*
- * This file is part of the i2c-cm3-usb project.
+ * This file is part of the i2c-star project.
  *
  * Copyright (C) 2014 Daniel Thompson <daniel@redfelineninja.org.uk>
  *

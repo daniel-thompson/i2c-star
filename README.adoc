@@ -1,7 +1,7 @@
 i2c-star - A STM32 based clone of the i2c-tiny-usb
 ==================================================
 
-i2c-cm3-usb is a compatible clone of Till Harbaum's i2c-tiny-usb. The firmware
+i2c-star is a compatible clone of Till Harbaum's i2c-tiny-usb. The firmware
 has no software in common with Till's implementation but is compatible with
 the i2c-tiny-usb driver found in the mainline Linux kernel. As a result
 it will work out of the box without requiring any special software on the
