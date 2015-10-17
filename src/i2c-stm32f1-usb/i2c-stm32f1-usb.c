@@ -26,6 +26,7 @@
 #include <libopencm3/cm3/scb.h>
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/cm3/systick.h>
+#include <libopencm3/stm32/desig.h>
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
@@ -359,9 +360,40 @@ static void i2c_init(void)
 		      GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, GPIO6 | GPIO7);
 }
 
+static void jump_to_bootloader(void)
+{
+	char *const marker = (char *)0x20004800; /* RAM@18K */
+	const char key[] = "remain-in-loader";
+
+	memcpy(marker, key, sizeof(key));
+	scb_reset_system(); /* Will never return. */
+}
+
+static pt_state_t do_id(console_t *c)
+{
+	char serial_no[25];
+
+	desig_get_unique_id_as_string(serial_no, sizeof(serial_no));
+	fprintf(c->out, "%s\n", serial_no);
+
+	return PT_EXITED;
+}
+
+static pt_state_t do_reboot(console_t *c)
+{
+	(void)c;
+	jump_to_bootloader();
+	return PT_EXITED;
+}
+
+static const console_cmd_t cmds[] = {
+	CONSOLE_CMD_VAR_INIT("id", do_id),
+	CONSOLE_CMD_VAR_INIT("reboot", do_reboot),
+};
+
 int main(void)
 {
-	int i;
+	unsigned int i;
 
 	rcc_clock_setup_in_hse_8mhz_out_72mhz();
 
@@ -369,6 +401,9 @@ int main(void)
 	rcc_periph_clock_enable(RCC_GPIOB);
 
 	console_init(&uart_console, stdout);
+	for (i=0; i<lengthof(cmds); i++)
+		console_register(&cmds[i]);
+
 	i2c_init();
 	time_init();
 
