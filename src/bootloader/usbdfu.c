@@ -110,8 +110,8 @@ const struct usb_config_descriptor config = {
 
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
-	"i2c-stm32f1-usb DFU upgrade",
-	"v1.1",
+	"DFU bootloader",
+	"v1.2",
 	/* This string is used by ST Microelectronics' DfuSe utility. */
 	"@Internal Flash   /0x08000000/8*001Ka,56*001Kg",
 };
@@ -265,7 +265,6 @@ int main(void)
 	usbd_device *usb_dev;
 
 	rcc_periph_clock_enable(RCC_GPIOA);
-
 
 	/* Check and clear the marker value */
 	found_key = (0 == strcmp(marker, key));
