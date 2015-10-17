@@ -111,7 +111,7 @@ const struct usb_config_descriptor config = {
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
 	"DFU bootloader",
-	"v1.2",
+	"v1.3",
 	/* This string is used by ST Microelectronics' DfuSe utility. */
 	"@Internal Flash   /0x08000000/8*001Ka,56*001Kg",
 };
@@ -180,7 +180,7 @@ static void usbdfu_getstatus_complete(usbd_device *usbd_dev, struct usb_setup_da
 }
 
 static int usbdfu_control_request(usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
-		uint16_t *len, void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req))
+		uint16_t *len, usbd_control_complete_callback *complete)
 {
 	if ((req->bmRequestType & 0x7F) != 0x21)
 		return 0; /* Only accept class request. */
@@ -246,7 +246,7 @@ static usbd_device *usb_init(void)
 		;
 
 	usb_dev =
-	    usbd_init(&stm32f103_usb_driver, &dev, &config, usb_strings, 4,
+	    usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings, 4,
 		      usbd_control_buffer, sizeof(usbd_control_buffer));
 	usbd_register_control_callback(
 	    usb_dev, USB_REQ_TYPE_CLASS | USB_REQ_TYPE_INTERFACE,

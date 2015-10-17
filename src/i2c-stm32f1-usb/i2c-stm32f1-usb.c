@@ -241,8 +241,7 @@ err:
 static int usb_control_request(usbd_device *usbd_dev,
 			       struct usb_setup_data *req, uint8_t **buf,
 			       uint16_t *len,
-			       void (**complete)(usbd_device *usbd_dev,
-						 struct usb_setup_data *req))
+			       usbd_control_complete_callback *complete)
 {
 	static uint8_t reply_buf[64];
 
@@ -328,7 +327,7 @@ static int usb_fibre(fibre_t *fibre)
 	t = time_now() + 10000;
 	PT_WAIT_UNTIL(fibre_timeout(t));
 
-	usbd_dev = usbd_init(&stm32f103_usb_driver, &dev, &config,
+	usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config,
 			usb_strings, 2,
 			usbd_control_buffer, sizeof(usbd_control_buffer));
 	usbd_register_set_config_callback(usbd_dev, usb_set_config);
