@@ -11,31 +11,45 @@ Quickstart
 ----------
 
 - Install gcc-arm-embedded compiler toolchain (or similar arm-none-eabi-
-  compiler).
+  compiler), openocd and dfu-util.
+- Clone this repo:
+  +git clone https://github.com/daniel-thompson/i2c-star.git+
+- Fetch the libraries:
+  +cd i2c-star; git submodule update --init --recursive+
+- Build the firmware:
 - +make+
-- +make -C src/bootloader flash+
-- +make -C src/i2c-stm32f1-usb flash+
+- Use a JTAG/SWD programmer to install the booloader. Either
+  +make -C src/bootloader flash+ for STLink v2 or
+  +make -C src/bootloader BMP_PORT=/dev/ttyACM0 flash+ for a Black Magic Probe.
+- Use the bootloader to install the main application using the microcontroller
+  board's own USB socket:
+  +make -C src/i2c-stm32f1-usb flash+
 
-To flash the bootloader an STLink v2 must be connected to the target
-boards JTAG/SWD socket.
+Examples
+--------
 
-To flash the main firmware the microcontroller must be connected to the
-host using its own USB socket.
+    $ i2cdetect -l
+    ...
+    i2c-7   unknown         i2c-tiny-usb at bus 001 device 031      N/A
+
+    $ i2cdetect -y 7
 
 Hardware setup
 --------------
 
-The firmware can be easily ported by has been tested on an small STM32F103C8T6
+The firmware can be easily ported but has been tested on an small STM32F103C8T6
 based breakout board. Connections required are:
 
 - USB to host computer
 - B7: I2C bus SDA and B6: I2C bus SCL (don't forget pull up resistors)
 - [Optional; debug only] PA9: UART TX and PA10: UART RX
 
+It has also been tested on the STM32F4-Discovery board, where no connections
+(except for USB) are required because this board has I2C peripherals built in
+
 Example hardware
 ----------------
 
-[http://www.lctech-inc.com/Hardware/Detail.aspx?id=0172e854-77b0-43d5-b300-68e570c914fd[ARM Cortex-M3 STM32F103C8T6 STM32 core board development board] manufactured by http://www.lctech-inc.com[Shenzhen LC Technology (LCTech)]:
+http://item.taobao.com/item.htm?spm=a1z10.1.w4004-386456545.4.3eifcC&id=22097803050[STM32F103C8T6 microcontroller development board] from vcc-gnd.com. Normally very easy to source on eBay.
 
-image::images/lctech-f103.jpg["LCTech STM32F103C8T6 core board"]
-
+image::images/stm32f103c8t6_dev_board.jpg["STM32F103C8T6 microcontroller development board"]
