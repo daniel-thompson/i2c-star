@@ -163,7 +163,7 @@ pt_state_t i2c_ctx_sendaddr(i2c_ctx_t *c, uint16_t addr,
 	if (c->bytes_remaining == 1)
 		I2C_CR1(c->i2c) &= ~I2C_CR1_ACK;
 	else if (c->bytes_remaining >= 2)
-		I2C_CR1(c->i2c) |= ~I2C_CR1_ACK;
+		I2C_CR1(c->i2c) |= I2C_CR1_ACK;
 
 	/* Read sequence has side effect or clearing I2C_SR1_ADDR */
 	uint32_t reg32 __attribute__((unused));
