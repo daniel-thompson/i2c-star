@@ -28,11 +28,23 @@ Quickstart
 Examples
 --------
 
+Note that the +i2c_dev+ kernel module needs to be loaded before using any of the
++i2c-tools+ utilities.
+
     $ i2cdetect -l
     ...
     i2c-7   unknown         i2c-tiny-usb at bus 001 device 031      N/A
 
     $ i2cdetect -y 7
+
+To make Linux aware of I2C devices on the bus, use the following command:
+
+    $ echo tmp102 0x48 | sudo tee /sys/class/i2c-adapter/i2c-7/new_device
+
+Where +tmp102+ is the name of the kernel driver you want to associate with the
+I2C device, +0x48+ is the I2C device's 7-bit address, and +i2c-7+ is the bus
+number the kernel assigned to the i2c-star adapter (appears as +i2c-tiny-usb+
+in +dmesg+ and +i2cdetect+).
 
 Hardware setup
 --------------
