@@ -111,7 +111,7 @@ const struct usb_config_descriptor config = {
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
 	"DFU bootloader",
-	"v1.3",
+	"v1.5",
 	/* This string is used by ST Microelectronics' DfuSe utility. */
 	"@Internal Flash   /0x08000000/8*001Ka,56*001Kg",
 };
@@ -150,11 +150,13 @@ static void usbdfu_getstatus_complete(usbd_device *usbd_dev, struct usb_setup_da
 					uint32_t *dat = (uint32_t *)(prog.buf + 1);
 					flash_erase_page(*dat);
 				}
+				break;
 			case CMD_SETADDR:
 				{
 					uint32_t *dat = (uint32_t *)(prog.buf + 1);
 					prog.addr = *dat;
 				}
+				break;
 			}
 		} else {
 			uint32_t baseaddr = prog.addr + ((prog.blocknum - 2) *
@@ -236,6 +238,8 @@ static usbd_device *usb_init(void)
 	uint32_t t;
 	usbd_device *usb_dev;
 
+	rcc_periph_clock_enable(RCC_GPIOA);
+
 	/* lower hotplug and leave enough time for the host to notice */
 	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
 		      GPIO11 | GPIO12);
@@ -263,8 +267,6 @@ int main(void)
 	bool found_key, found_anti_key, found_pin_reset;
 	usbd_device *usb_dev;
 
-	rcc_periph_clock_enable(RCC_GPIOA);
-
 	/* Check and clear the marker value */
 	found_key = (0 == strcmp(marker, key));
 	found_anti_key = (0 == strcmp(marker, anti_key));
@@ -283,10 +285,6 @@ int main(void)
 	if ((!found_key && !found_pin_reset) || found_anti_key) {
 		/* Boot the application if it's valid. */
 		if ((*(volatile uint32_t *)APP_ADDRESS & 0x2FFE0000) == 0x20000000) {
-			/* Restore GPIOA to reset defaults */
-			gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-				      GPIO_CNF_INPUT_FLOAT, 0xffff);
-
 			/* Set vector table base address. */
 			SCB_VTOR = APP_ADDRESS & 0xFFFF;
 			/* Initialise master stack pointer. */
@@ -298,16 +296,11 @@ int main(void)
 	}
 
 	rcc_clock_setup_in_hsi_out_48mhz();
-	rcc_periph_clock_enable(RCC_GPIOB);
 
 	/* set the anti-key so that the next reset causes us to leave the
 	 * bootloader if there is a valid application flashed
 	 */
 	memcpy(marker, anti_key, sizeof(anti_key));
-
-	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
-		      GPIO_CNF_OUTPUT_PUSHPULL, GPIO4);
-	gpio_clear(GPIOA, GPIO4);
 
 	time_init();
 	usb_dev = usb_init();
