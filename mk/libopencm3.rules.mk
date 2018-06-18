@@ -210,7 +210,6 @@ ifeq ($(DFU_ADDRESS),)
 else
 %.flash: %.bin
 	@printf "  FLASH   $<\n"
-	-$(Q)amidi -p hw:multistomp,0,0 --send-hex "f0 60 07 10 4d f7" 2> /dev/null && sleep 1
 	$(Q)dfu-util -a 0 -d 0483:df11 -s $(DFU_ADDRESS):leave -D $(*).bin
 endif
 else
@@ -230,7 +229,10 @@ else
 	@printf "  GDB   $(*).elf (flash)\n"
 	$(Q)$(GDB) --batch \
 		   -ex 'target extended-remote $(BMP_PORT)' \
-		   -x $(SCRIPT_DIR)/black_magic_probe_flash.scr \
+		   -ex 'monitor version' \
+		   -ex 'monitor swdp_scan' \
+		   -ex 'attach 1' \
+		   -ex 'load' \
 		   $(*).elf
 endif
 else

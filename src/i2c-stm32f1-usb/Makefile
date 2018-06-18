@@ -22,7 +22,7 @@ BINARY = i2c-stm32f1-usb
 DEFS += -DF_CPU=72000000
 DEFS += -DF_APB1=3600000
 
-OBJS += console.o console_stm32f1.o
+OBJS += console.o console_stm32.o
 
 DFU_ADDRESS = 0x08002000
 LDSCRIPT = ../lctech-f103.ld

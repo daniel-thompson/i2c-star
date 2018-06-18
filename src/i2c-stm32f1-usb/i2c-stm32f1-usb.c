@@ -239,10 +239,10 @@ err:
 	return USBD_REQ_HANDLED;
 }
 
-static int usb_control_request(usbd_device *usbd_dev,
-			       struct usb_setup_data *req, uint8_t **buf,
-			       uint16_t *len,
-			       usbd_control_complete_callback *complete)
+static enum usbd_request_return_codes usb_control_request(
+    usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
+    uint16_t *len,
+    void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req))
 {
 	static uint8_t reply_buf[64];
 

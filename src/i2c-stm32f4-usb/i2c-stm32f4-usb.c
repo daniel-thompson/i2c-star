@@ -236,11 +236,10 @@ err:
 	return USBD_REQ_HANDLED;
 }
 
-static int usb_control_request(usbd_device *usbd_dev,
-			       struct usb_setup_data *req, uint8_t **buf,
-			       uint16_t *len,
-			       void (**complete)(usbd_device *usbd_dev,
-						 struct usb_setup_data *req))
+static enum usbd_request_return_codes usb_control_request(
+    usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
+    uint16_t *len,
+    void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req))
 {
 	static uint8_t reply_buf[64];
 
@@ -362,7 +361,7 @@ int main(void)
 {
 	int i;
 
-	rcc_clock_setup_hse_3v3(&hse_8mhz_3v3[CLOCK_3V3_120MHZ]);
+	rcc_clock_setup_hse_3v3(&rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_120MHZ]);
 
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_GPIOB);
