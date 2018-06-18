@@ -231,6 +231,7 @@ static int usb_i2c_io(struct usb_setup_data *req, uint8_t *buf, uint16_t *len)
 	return USBD_REQ_HANDLED;
 
 err:
+	i2c_ctx_reset(&ctx);
 	status = STATUS_ADDRESS_NACK;
 	*len = 0;
 	return USBD_REQ_HANDLED;
