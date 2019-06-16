@@ -125,6 +125,7 @@ uint8_t usbd_control_buffer[128];
 #define I2C_FUNC_10BIT_ADDR		0x00000002
 #define I2C_FUNC_PROTOCOL_MANGLING	0x00000004 /* I2C_M_{REV_DIR_ADDR,NOSTART,..} */
 #define I2C_FUNC_SMBUS_HWPEC_CALC	0x00000008 /* SMBus 2.0 */
+#define I2C_FUNC_NOSTART		0x00000010 /* I2C_M_NOSTART */
 #define I2C_FUNC_SMBUS_READ_WORD_DATA_PEC  0x00000800 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_WRITE_WORD_DATA_PEC 0x00001000 /* SMBus 2.0 */
 #define I2C_FUNC_SMBUS_PROC_CALL_PEC	0x00002000 /* SMBus 2.0 */
@@ -168,7 +169,7 @@ uint8_t usbd_control_buffer[128];
                             I2C_FUNC_SMBUS_I2C_BLOCK
 
 /* the currently support capability is quite limited */
-const unsigned long func = I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
+const unsigned long func = I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_NOSTART;
 
 
 #define STATUS_IDLE	   0
@@ -198,18 +199,20 @@ static int usb_i2c_io(struct usb_setup_data *req, uint8_t *buf, uint16_t *len)
 
 	i2c_ctx_init(&ctx, I2C1);
 
-	/* We can ignore CMD_I2C_BEGIN, the hardware will work out which
-	 * type of start condition to generate.
-	 */
-	PT_CALL(&ctx.leaf, i2c_ctx_start(&ctx));
-	if (ctx.err)
-		goto err;
+	if (!(req->wValue & I2C_M_NOSTART)) {
+		/* We can ignore CMD_I2C_BEGIN, the hardware will work out which
+		 * type of start condition to generate.
+		 */
+		PT_CALL(&ctx.leaf, i2c_ctx_start(&ctx));
+		if (ctx.err)
+			goto err;
 
-	/* Send the address */
-	PT_CALL(&ctx.leaf,
-		i2c_ctx_sendaddr(&ctx, address, (is_read ? size : 0)));
-	if (ctx.err)
-		goto err;
+		/* Send the address */
+		PT_CALL(&ctx.leaf,
+			i2c_ctx_sendaddr(&ctx, address, (is_read ? size : 0)));
+		if (ctx.err)
+			goto err;
+	}
 
 	/* Perform the transaction */
 	for (int i=0; i<size; i++) {
