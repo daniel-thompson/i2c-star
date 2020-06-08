@@ -328,6 +328,15 @@ static int usb_fibre(fibre_t *fibre)
 	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
 		      GPIO11 | GPIO12);
 	gpio_clear(GPIOA, GPIO11 | GPIO12);
+
+#ifdef USE_MAPLEMINI
+	/* add support for Maplemini board */
+	rcc_periph_clock_enable(RCC_GPIOB);
+	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
+		      GPIO9);
+	gpio_clear(GPIOB, GPIO9);
+#endif
+
 	t = time_now() + 10000;
 	PT_WAIT_UNTIL(fibre_timeout(t));
 
