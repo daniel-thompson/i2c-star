@@ -49,7 +49,7 @@ static const struct usb_device_descriptor dev = {
 	.bcdDevice = 0x0205,
 	.iManufacturer = 1,
 	.iProduct = 2,
-	.iSerialNumber = 0,
+	.iSerialNumber = 3,
 	.bNumConfigurations = 1,
 };
 
@@ -94,9 +94,13 @@ static const struct usb_config_descriptor config = {
 	.interface = ifaces,
 };
 
+/* 96 bit as hex, no prefix */
+static char serial_nr[28] = { 0 };
+
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
 	"i2c-stm32f1-usb",
+	serial_nr,
 };
 
 /* Buffer to be used for control requests. */
@@ -341,7 +345,7 @@ static int usb_fibre(fibre_t *fibre)
 	PT_WAIT_UNTIL(fibre_timeout(t));
 
 	usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config,
-			usb_strings, 2,
+			usb_strings, 3,
 			usbd_control_buffer, sizeof(usbd_control_buffer));
 	usbd_register_set_config_callback(usbd_dev, usb_set_config);
 
@@ -383,10 +387,7 @@ static void jump_to_bootloader(void)
 
 static pt_state_t do_id(console_t *c)
 {
-	char serial_no[25];
-
-	desig_get_unique_id_as_string(serial_no, sizeof(serial_no));
-	fprintf(c->out, "%s\n", serial_no);
+	fprintf(c->out, "%s\n", serial_nr);
 
 	return PT_EXITED;
 }
@@ -412,6 +413,7 @@ int main(void)
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_GPIOB);
 
+	desig_get_unique_id_as_string(serial_nr, sizeof(serial_nr));
 	console_init(&uart_console, stdout);
 	for (i=0; i<lengthof(cmds); i++)
 		console_register(&cmds[i]);
