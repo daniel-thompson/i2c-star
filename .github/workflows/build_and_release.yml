@@ -1,0 +1,54 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+
+      - name: Install ARM GCC Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Build with Make
+        run: make -j4
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts
+          path: |
+            ./src/bootloader/usbdfu.elf
+            ./src/bootloader/usbdfu.hex
+            ./src/i2c-stm32f1-usb/i2c-stm32f1-usb.elf
+            ./src/i2c-stm32f4-usb/i2c-stm32f4-usb.elf
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: build-artifacts
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ./build-artifacts/src/bootloader/usbdfu.elf
+            ./build-artifacts/src/bootloader/usbdfu.hex
+            ./build-artifacts/src/i2c-stm32f1-usb/i2c-stm32f1-usb.elf
+            ./build-artifacts/src/i2c-stm32f4-usb/i2c-stm32f4-usb.elf
