@@ -26,6 +26,7 @@
 #include <libopencm3/cm3/scb.h>
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/cm3/systick.h>
+#include <libopencm3/stm32/desig.h>
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
@@ -47,7 +48,7 @@ static const struct usb_device_descriptor dev = {
 	.bcdDevice = 0x0205,
 	.iManufacturer = 1,
 	.iProduct = 2,
-	.iSerialNumber = 0,
+	.iSerialNumber = 3,
 	.bNumConfigurations = 1,
 };
 
@@ -92,9 +93,13 @@ static const struct usb_config_descriptor config = {
 	.interface = ifaces,
 };
 
+/* 96 bit as hex, no prefix */
+static char serial_nr[28] = { 0 };
+
 static const char *usb_strings[] = {
 	"redfelineninja.org.uk",
 	"i2c-stm32f4-usb",
+	serial_nr,
 };
 
 /* Buffer to be used for control requests. */
@@ -322,7 +327,7 @@ static int usb_fibre(fibre_t *fibre)
 	gpio_set_af(GPIOA, GPIO_AF10, GPIO9 | GPIO11 | GPIO12);
 
 	usbd_dev = usbd_init(&otgfs_usb_driver, &dev, &config,
-			usb_strings, 2,
+			usb_strings, 3,
 			usbd_control_buffer, sizeof(usbd_control_buffer));
 	usbd_register_set_config_callback(usbd_dev, usb_set_config);
 
@@ -367,6 +372,7 @@ int main(void)
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_GPIOB);
 
+	desig_get_unique_id_as_string(serial_nr, sizeof(serial_nr));
 	i2c_init();
 	time_init();
 
